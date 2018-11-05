@@ -7,6 +7,7 @@ Instructions:
 2. To initialize the application, we have two options
 
     i) The more simple one
+    
         sbt run
 
     ii) Package as an object and then run
@@ -15,9 +16,7 @@ Instructions:
         unzip target/universal/steve-favicon-finder-1.0-SNAPSHOT.zip
         steve-favicon-finder-1.0-SNAPSHOT/bin/steve-favicon-finder -Dplay.http.secret.key="favicon" &
 
-3. To seed the database:
-
-    i) Run seed.py to ping the server
+3. To seed the database. Run seed.py to ping the server
 
         python seed.py &
 
@@ -25,4 +24,3 @@ Instructions:
         seed_success.txt
         seed_fail.txt
 
-    ii) Insert from previous values
