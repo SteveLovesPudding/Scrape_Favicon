@@ -1,57 +1,28 @@
-# play-scala-starter-example
+Instructions:
 
-[<img src="https://img.shields.io/travis/playframework/play-scala-starter-example.svg"/>](https://travis-ci.org/playframework/play-scala-starter-example)
+1. To initialize the mysql db that's used to persist favicon
 
-This is a starter application that shows how Play works.  Please see the documentation at <https://www.playframework.com/documentation/latest/Home> for more details.
+    docker-compose up &
 
-## Running
+2. To initialize the application, we have two options
 
-Run this using [sbt](http://www.scala-sbt.org/).  If you downloaded this project from <http://www.playframework.com/download> then you'll find a prepackaged version of sbt in the project directory:
+    i) The more simple one
+        sbt run
 
-```bash
-sbt run
-```
+    ii) Package as an object and then run
 
-And then go to <http://localhost:9000> to see the running web application.
+        sbt dist
+        unzip target/universal/steve-favicon-finder-1.0-SNAPSHOT.zip
+        steve-favicon-finder-1.0-SNAPSHOT/bin/steve-favicon-finder -Dplay.http.secret.key="favicon" &
 
-There are several demonstration files available in this template.
+3. To seed the database:
 
-## Controllers
+    i) Run seed.py to ping the server
 
-- `HomeController.scala`:
+        python seed.py &
 
-  Shows how to handle simple HTTP requests.
+        You can track the success/failures through
+        seed_success.txt
+        seed_fail.txt
 
-- `AsyncController.scala`:
-
-  Shows how to do asynchronous programming when handling a request.
-
-- `CountController.scala`:
-
-  Shows how to inject a component into a controller and use the component when
-  handling requests.
-
-## Components
-
-- `Module.scala`:
-
-  Shows how to use Guice to bind all the components needed by your application.
-
-- `Counter.scala`:
-
-  An example of a component that contains state, in this case a simple counter.
-
-- `ApplicationTimer.scala`:
-
-  An example of a component that starts when the application starts and stops
-  when the application stops.
-
-## Filters
-
-- `Filters.scala`:
-
-  Creates the list of HTTP filters used by your application.
-
-- `ExampleFilter.scala`:
-
-  A simple filter that adds a header to every response.
+    ii) Insert from previous values
