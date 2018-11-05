@@ -4,6 +4,7 @@ import threading
 import time
 import os
 
+list_csv = 'top-1m.csv'
 concurrent = 50
 limit = 200000
 
@@ -28,7 +29,7 @@ def chunks(l):
 threads = []
 
 start = time.time()
-with open('top-1m.csv') as csv_file:
+with open(list_csv) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     urls = [row[1] for row in csv_reader]
 
@@ -45,6 +46,7 @@ except OSError:
 success = open(success_file, "a")
 failure = open(fail_file, "a")
 success_count = 0
+chunk_count = 0
 
 chunked_urls = chunks(urls)
 for chunk in chunked_urls:
@@ -68,8 +70,11 @@ for chunk in chunked_urls:
     fail_records = []
     failure.flush()
 
+    chunk_count += len(chunk)
+    print("Elapsed time %d count %d" % (time.time()-start, chunk_count))
+
 success.close()
 failure.close()
 
 end = time.time()
-print("Elapsed time %d" % (end-start))
+print("Total Elapsed time %d" % (end-start))
