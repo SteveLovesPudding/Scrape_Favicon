@@ -56,6 +56,7 @@ class FaviconController @Inject()(cc: ControllerComponents,
   private def queryUrl(url: String): Future[WSResponse] = {
     ws.url(url)
       .addHttpHeaders("Content-Type" -> "application/xml")
+      .withFollowRedirects(true)
       .get()
   }
 
@@ -116,6 +117,7 @@ class FaviconController @Inject()(cc: ControllerComponents,
               case None =>
                 None
             }
+            Logger.info(s"$url received ${response.status}")
           case _ => None
         }
       }.recover {
@@ -185,11 +187,6 @@ class FaviconController @Inject()(cc: ControllerComponents,
           case Some(data) =>
             data.get("url").map { urls =>
 
-              val url =
-                if (urls.head.startsWith("http")) urls.head
-                else if (urls.head.startsWith("www")) s"https://${urls.head}"
-                else s"https://www.${urls.head}"
-              
               val getFresh = data.get("getFresh") match {
                 case Some(values) =>
                   (values.headOption match {
@@ -198,27 +195,59 @@ class FaviconController @Inject()(cc: ControllerComponents,
                   }).isDefined
                 case _ => false
               }
-              (url, getFresh)
+              (urls.head, getFresh)
             }
           case None => None
         }
       }
 
+      //Inner function to get urls to check
+      def getUrls(baseUrl: String): List[String] = {
+        val hasProtocol = (s: String) => s.startsWith("http")
+        val hasSubdomain = (s: String) => s.startsWith("www")
+        if (hasProtocol(baseUrl)) List(baseUrl)
+        else if (hasSubdomain(baseUrl)) {
+          List(
+            s"http://$baseUrl",
+            s"https://$baseUrl")
+        } else {
+          List(
+            s"http://$baseUrl",
+            s"https://$baseUrl",
+            s"http://www.$baseUrl",
+            s"https://www.$baseUrl")
+        }
+      }
+
+      //Inner function to check for urls
+      def getFavicon(url: String, getFresh: Boolean): Option[String] = {
+        Try(
+          {
+            //If get fresh then we will skip db check and directly check value
+            if (getFresh) querySource(url)
+            else getURLFromDB(url) match {
+              case Some(favUrl) => Some(favUrl)
+              case _ => querySource(url)
+            }
+          }
+        ).getOrElse(None)
+      }
+
       parseRequestData(request) match {
         case Some((url, getFresh)) =>
-          Try(
-            {
-              //If get fresh then we will skip db check and directly check value
-              val checkUrl = if (getFresh) querySource(url)
-              else getURLFromDB(url) match {
-                case Some(favUrl) => Some(favUrl)
-                case _ => querySource(url)
-              }
-              checkUrl match {
-                case Some(favUrl) => Future(Ok(favUrl))
-                case None => Future(NotFound(s"No favicon found for $url"))
-              }
-            }).getOrElse(Future(NotFound(s"No favicon found for $url")))
+          val urls = getUrls(url)
+          Logger.info(s"Checking for $url -> ${urls.mkString(", ")}")
+          var favUrl: Option[String] = None
+          urls.view.find { u =>
+            favUrl = getFavicon(u, getFresh)
+            favUrl.isDefined
+          }
+          favUrl match {
+            case Some(fUrl) =>
+              persistToDb(url, fUrl)
+              Future(Ok(fUrl))
+            case None => Future(NotFound(s"No favicon found for $url"))
+          }
         case None => Future(BadRequest("Invalid data in request"))
       }
 
