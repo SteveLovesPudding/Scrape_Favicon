@@ -8,3 +8,14 @@ target
 /.project
 /.settings
 /RUNNING_PID
+steve-favicon-finder-1.0-SNAPSHOT/
+steve-favicon-finder-1.0-SNAPSHOT/*
+seed_fail.txt
+seed_success.txt
+.Python
+.Python/*
+bin/
+bin/*
+lib/*
+include/*
+pip-selfcheck.json

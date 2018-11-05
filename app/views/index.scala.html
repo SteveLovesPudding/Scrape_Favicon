@@ -1,20 +1,55 @@
-@*
- * This template takes a two arguments, a String containing a
- * message to display and an AssetsFinder to locate static assets.
- *@
-@(message: String)(implicit assetsFinder: AssetsFinder)
+@()(implicit assetsFinder: AssetsFinder)
+<html lang="en">
+    <head>
+        <title>Steve's Favicon Finder</title>
+        <meta charset="utf-8" />
+        <script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    </head>
+    <body>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+              document.getElementById('submit-fav').addEventListener('click', clickHandler);
+            });
 
-@*
- * Call the `main` template with two arguments. The first
- * argument is a `String` with the title of the page, the second
- * argument is an `Html` object containing the body of the page.
- *@
-@main("Welcome to Steve Play", assetsFinder) {
-
-    @*
-     * Get an `Html` object by calling the built-in Play welcome
-     * template and passing a `String` message.
-     *@
-    @welcome(message, style = "scala")
-
-}
+            //This function will call get_fav and display to the screen
+            function clickHandler(element) {
+                var targetUrl = document.getElementById('target-url').value;
+                $.post( "/get_fav",
+                    { url: targetUrl }
+                ).done( function(data) {
+                    var favUrl = data;
+                    document.getElementById('result-display').innerHTML = favUrl;
+                    document.getElementById('target-image').src = favUrl;
+                }).fail( function(data){
+                    document.getElementById('result-display').innerHTML = "Couldn't find value for " + targetUrl;
+                    document.getElementById('target-image').src = "";
+                });
+            }
+        </script>
+        <div class="container">
+            <div class="row" name="header">
+                <div class="col text-center">
+                    <h1>Favicon Finder</h1>
+                </div>
+            </div>
+            <div class="row" name="input">
+                <div class="col-10 form-group">
+                    <input type="text" class="form-control" id="target-url">
+                </div>
+                <div class="col-2">
+                    <button type="button" class="btn btn-secondary" id="submit-fav">Find Favicon</button>
+                </div>
+            </div>
+            <div class="row" name="result">
+                <div class="col text-center" id="result-display">
+                </div>
+            </div>
+            <div class="row" name="image">
+                <div class="col text-center">
+                    <img src="" id="target-image">
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
