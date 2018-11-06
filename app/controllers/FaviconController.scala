@@ -140,27 +140,27 @@ class FaviconController @Inject()(cc: ControllerComponents,
   }
 
   /**
-    * Query URL for favicon. Current strategy
-    * 1. check root for favicon.ico
-    * 2. check html head for link tag
-    *
-    * @param url : Url to verify
+    * Current strategy of grabbing favicon for a specific url
+    * @param url Target url
+    * @param getFresh flag to determine if we should reevaluate value in DB
     * @return
     */
-  private def querySource(url: String): Future[Option[String]] = {
-
-    checkFaviconIco(url).flatMap{
-      case Some(favUrl) =>
-        persistToDb(url, favUrl)
-        Future(Some(favUrl))
-      case None =>
-        checkHeadForLink(url).map {
-          case Some(favUrl) =>
-            persistToDb(url, favUrl)
-            Some(favUrl)
-          case None => None
-        }
-    }
+  def getFavicon(url: String, getFresh: Boolean): Option[String] = {
+    Logger.info(s"Checking $url")
+    Try(
+      {
+        Await.result(
+          {
+            //If get fresh then we will skip db check and directly check value
+            for{
+              dbRes <- if(!getFresh) getURLFromDB(url) else Future(None)
+              rootRes <- if(dbRes.isDefined) Future(dbRes) else checkFaviconIco(url)
+              headRes <- if(rootRes.isDefined) Future(rootRes) else checkHeadForLink(url)
+            }yield(headRes)
+          }, 2500 millis
+        )
+      }
+    ).getOrElse(None)
   }
 
   /**
@@ -173,7 +173,7 @@ class FaviconController @Inject()(cc: ControllerComponents,
     request =>
 
       //Inner function to parse POST data and check for url and getFresh flag
-      def parseRequestData(request: Request[AnyContent]): Option[(String, Boolean)] = {
+      def parseRequestData: Option[(String, Boolean)] = {
         request.body.asFormUrlEncoded match {
           case Some(data) =>
             data.get("url").map { urls =>
@@ -210,30 +210,17 @@ class FaviconController @Inject()(cc: ControllerComponents,
         }
       }
 
-      //Inner function to check for urls
-      def getFavicon(url: String, getFresh: Boolean): Future[Option[String]] = {
-        Try(
-          {
-            //If get fresh then we will skip db check and directly check value
-            if (getFresh) querySource(url)
-            else getURLFromDB(url).flatMap {
-              case Some(favUrl) => Future(Some(favUrl))
-              case _ => querySource(url)
-            }
-          }
-        ).getOrElse(Future(None))
-      }
-
-      parseRequestData(request) match {
+      parseRequestData match {
         case Some((url, getFresh)) =>
           val urls = getUrls(url)
           Logger.info(s"Checking for $url -> ${urls.mkString(", ")}")
           var favIcon: Option[String] = None
           urls.view.find { u =>
-            favIcon = Await.result(
-              getFavicon(u, getFresh),
-              2500 millis
-            )
+            favIcon = getFavicon(u, getFresh)
+            favIcon.map{ favUrl =>
+              persistToDb(u, favUrl)
+              if(u != url) persistToDb(url, favUrl)
+            }
             favIcon.isDefined
           }
 
