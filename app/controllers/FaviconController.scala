@@ -29,21 +29,18 @@ class FaviconController @Inject()(cc: ControllerComponents,
     * @param url target url
     * @return
     */
-  private def getURLFromDB(url: String): Option[String] = {
+  private def getURLFromDB(url: String): Future[Option[String]] = {
 
     Logger.info(s"Checking db for $url")
-    Await.result(
-      Favicons.get(url)
-        .map {
-          _.map(_.favUrl)
-        }
-        .recover {
-          case t: Throwable =>
-            Logger.error(t.getMessage)
-            None
-        },
-      2500 millis
-    )
+    Favicons.get(url)
+      .map {
+        _.map(_.favUrl)
+      }
+      .recover {
+        case t: Throwable =>
+          Logger.error(t.getMessage)
+          None
+      }
   }
 
   /**
@@ -66,25 +63,22 @@ class FaviconController @Inject()(cc: ControllerComponents,
     * @param url target url
     * @return
     */
-  private def checkFaviconIco(url: String): Option[String] = {
+  private def checkFaviconIco(url: String): Future[Option[String]] = {
 
     Logger.info(s"Checking favion ico url for $url")
 
     val favUrl = s"$url/favicon.ico"
-    Await.result(
-      queryUrl(favUrl).map {
-        response =>
-          response.status match {
-            case 200 => Some(favUrl)
-            case _ => None
-          }
-      }.recover {
-        case t =>
-          Logger.error(t.getMessage)
-          None
-      },
-      2500 millis
-    )
+    queryUrl(favUrl).map {
+      response =>
+        response.status match {
+          case 200 => Some(favUrl)
+          case _ => None
+        }
+    }.recover {
+      case t =>
+        Logger.error(t.getMessage)
+        None
+    }
   }
 
   /**
@@ -94,39 +88,35 @@ class FaviconController @Inject()(cc: ControllerComponents,
     * @param url target url
     * @return
     */
-  private def checkHeadForLink(url: String): Option[String] = {
+  private def checkHeadForLink(url: String): Future[Option[String]] = {
 
     Logger.info(s"Checking page for $url")
 
-    Await.result(
-      queryUrl(url).map { response =>
-
-        response.status match {
-          case 200 =>
-            val doc: Document = Jsoup.parse(response.body)
-            val head = doc.head
-            val links = head.select("link[href]")
-            links.listIterator.asScala.toList.find {
-              element =>
-                element.attr("rel") == "icon" || element.attr("rel") == "shortcut icon"
-            } match {
-              case Some(element) =>
-                val attr = element.attr("href")
-                val favUrl = if (attr.startsWith("/")) s"$url$attr" else attr
-                Some(favUrl)
-              case None =>
-                None
-            }
-            Logger.info(s"$url received ${response.status}")
-          case _ => None
-        }
-      }.recover {
-        case t =>
-          Logger.error(t.getMessage)
-          None
-      },
-      2500 millis
-    )
+    queryUrl(url).map { response =>
+      Logger.info(s"$url received ${response.status}")
+      response.status match {
+        case 200 =>
+          val doc: Document = Jsoup.parse(response.body)
+          val head = doc.head
+          val links = head.select("link[href]")
+          links.listIterator.asScala.toList.find {
+            element =>
+              element.attr("rel") == "icon" || element.attr("rel") == "shortcut icon"
+          } match {
+            case Some(element) =>
+              val attr = element.attr("href")
+              val favUrl = if (attr.startsWith("/")) s"$url$attr" else attr
+              Some(favUrl)
+            case None =>
+              None
+          }
+        case _ => None
+      }
+    }.recover {
+      case t =>
+        Logger.error(t.getMessage)
+        None
+    }
 
   }
 
@@ -157,13 +147,14 @@ class FaviconController @Inject()(cc: ControllerComponents,
     * @param url : Url to verify
     * @return
     */
-  private def querySource(url: String): Option[String] = {
-    checkFaviconIco(url) match {
+  private def querySource(url: String): Future[Option[String]] = {
+
+    checkFaviconIco(url).flatMap{
       case Some(favUrl) =>
         persistToDb(url, favUrl)
-        Some(favUrl)
+        Future(Some(favUrl))
       case None =>
-        checkHeadForLink(url) match {
+        checkHeadForLink(url).map {
           case Some(favUrl) =>
             persistToDb(url, favUrl)
             Some(favUrl)
@@ -220,34 +211,37 @@ class FaviconController @Inject()(cc: ControllerComponents,
       }
 
       //Inner function to check for urls
-      def getFavicon(url: String, getFresh: Boolean): Option[String] = {
+      def getFavicon(url: String, getFresh: Boolean): Future[Option[String]] = {
         Try(
           {
             //If get fresh then we will skip db check and directly check value
             if (getFresh) querySource(url)
-            else getURLFromDB(url) match {
-              case Some(favUrl) => Some(favUrl)
+            else getURLFromDB(url).flatMap {
+              case Some(favUrl) => Future(Some(favUrl))
               case _ => querySource(url)
             }
           }
-        ).getOrElse(None)
+        ).getOrElse(Future(None))
       }
 
       parseRequestData(request) match {
         case Some((url, getFresh)) =>
           val urls = getUrls(url)
           Logger.info(s"Checking for $url -> ${urls.mkString(", ")}")
-          var favUrl: Option[String] = None
+          var favIcon: Option[String] = None
           urls.view.find { u =>
-            favUrl = getFavicon(u, getFresh)
-            favUrl.isDefined
+            favIcon = Await.result(
+              getFavicon(u, getFresh),
+              2500 millis
+            )
+            favIcon.isDefined
           }
-          favUrl match {
-            case Some(fUrl) =>
-              persistToDb(url, fUrl)
-              Future(Ok(fUrl))
+
+          favIcon match {
+            case Some(favUrl) => Future(Ok(favUrl))
             case None => Future(NotFound(s"No favicon found for $url"))
           }
+
         case None => Future(BadRequest("Invalid data in request"))
       }
 
